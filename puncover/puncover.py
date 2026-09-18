@@ -6,6 +6,7 @@ import json
 import os
 import webbrowser
 from os.path import dirname
+from pathlib import Path
 from shutil import which
 from threading import Timer
 
@@ -36,10 +37,10 @@ def get_default_port():
     return DEFAULT_PORT if not is_port_in_use(DEFAULT_PORT) else DEFAULT_PORT_FALLBACK
 
 
-def create_builder(gcc_base_filename, elf_file=None, su_dir=None, src_root=None):
+def create_builder(gcc_base_filename, elf_file=None, su_dir=None, src_root=None, map_file=None):
     c = Collector(GCCTools(gcc_base_filename))
     if elf_file:
-        return ElfBuilder(c, src_root, elf_file, su_dir)
+        return ElfBuilder(c, src_root, elf_file, su_dir, map_file)
     else:
         raise Exception("Unable to configure builder for collector")
 
@@ -100,6 +101,13 @@ def main():
     )
     parser.add_argument("--src_root", "--src-root", help="location of your sources")
     parser.add_argument("--build_dir", "--build-dir", help="location of your build output")
+    parser.add_argument(
+        "--map",
+        "--map-file",
+        "--map_file",
+        dest="map_file",
+        help="GNU ld MAP file used for exact FLASH/RAM accounting",
+    )
     parser.add_argument("--debug", action="store_true", help="enable Flask debugger")
     parser.add_argument(
         "--port",
@@ -179,8 +187,18 @@ def main():
         )
         exit(1)
 
+    map_file = args.map_file
+    if not map_file:
+        sibling_map = Path(elf_file).with_suffix(".map")
+        if sibling_map.is_file():
+            map_file = str(sibling_map)
+
     builder = create_builder(
-        args.gcc_tools_base, elf_file=elf_file, src_root=args.src_root, su_dir=args.build_dir
+        args.gcc_tools_base,
+        elf_file=elf_file,
+        src_root=args.src_root,
+        su_dir=args.build_dir,
+        map_file=map_file,
     )
     builder.build_if_needed()
 

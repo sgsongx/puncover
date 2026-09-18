@@ -200,6 +200,23 @@ class TestArguments(unittest.TestCase):
             call_args = env.create_builder.call_args
             self.assertEqual(call_args[1]["su_dir"], "/path/to/build")
 
+    def test_map_file_argument(self):
+        """Test that --map-file is passed to the builder."""
+        test_args = [
+            "puncover",
+            "--gcc-tools-base",
+            "/path/to/gcc",
+            "--elf",
+            "/path/to/file.elf",
+            "--map-file",
+            "/path/to/file.map",
+        ]
+
+        with self._patched_main(test_args) as env:
+            main()
+            call_args = env.create_builder.call_args
+            self.assertEqual(call_args[1]["map_file"], "/path/to/file.map")
+
     def test_host_argument(self):
         """Test that --host argument works."""
         test_args = [

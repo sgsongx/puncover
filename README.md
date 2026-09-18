@@ -33,6 +33,18 @@ puncover project.elf
 
 Open the link in your browser to view the analysis.
 
+For exact FLASH and RAM accounting, pass the GNU ld MAP file produced by the
+same link step:
+
+```bash
+puncover project.elf --map project.map
+```
+
+If `project.map` is next to `project.elf`, puncover discovers it automatically.
+The memory summary includes code/read-only data, initialized data, static RAM,
+stack, heap, linker metadata, and alignment padding. Symbol tables show both
+the runtime address and, for initialized variables, the FLASH load address.
+
 You can also use `uvx` to run the script without installing globally:
 
 ```bash

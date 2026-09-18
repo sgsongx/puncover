@@ -100,6 +100,32 @@ def symbol_var_size_filter(context, value):
 
 
 @jinja2.pass_context
+def symbol_flash_size_filter(context, value):
+    return traverse_filter_wrapper(
+        value,
+        lambda s: s.get(
+            collector.FLASH_SIZE,
+            s.get(collector.SIZE, 0)
+            if s.get(collector.TYPE, None) == collector.TYPE_FUNCTION
+            else 0,
+        ),
+    )
+
+
+@jinja2.pass_context
+def symbol_ram_size_filter(context, value):
+    return traverse_filter_wrapper(
+        value,
+        lambda s: s.get(
+            collector.RAM_SIZE,
+            s.get(collector.SIZE, 0)
+            if s.get(collector.TYPE, None) == collector.TYPE_VARIABLE
+            else 0,
+        ),
+    )
+
+
+@jinja2.pass_context
 def symbol_stack_size_filter(context, value, stack_base=None):
     if isinstance(stack_base, str):
         stack_base = None
@@ -213,6 +239,15 @@ def bytes_filter(context, x):
 
 
 @jinja2.pass_context
+def address_filter(context, value):
+    if isinstance(value, int):
+        return "0x{:08x}".format(value)
+    if isinstance(value, str) and value:
+        return "0x" + value.removeprefix("0x")
+    return ""
+
+
+@jinja2.pass_context
 def style_background_bar_filter(context, x, total, color=None):
     if not is_int_ge(x, 1) or not is_int_ge(total, 1):
         return ""
@@ -265,6 +300,8 @@ def sorted_filter(context, symbols):
     key = {
         "name": lambda e: e.get(collector.DISPLAY_NAME, e.get(collector.NAME, None)).lower(),
         "code": lambda e: to_num(symbol_code_size_filter(context, e)),
+        "flash": lambda e: to_num(symbol_flash_size_filter(context, e)),
+        "ram": lambda e: to_num(symbol_ram_size_filter(context, e)),
         "stack": lambda e: to_num(symbol_stack_size_filter(context, e)),
         "vars": lambda e: to_num(symbol_var_size_filter(context, e)),
     }[sort_id]
@@ -275,14 +312,21 @@ def sorted_filter(context, symbols):
 class HTMLRenderer(View):
     def __init__(self, collector):
         self.collector = collector
+        all_files = collector.all_files()
+        root_files = (
+            [f for f in all_files if not f.get("folder")] if isinstance(all_files, Iterable) else []
+        )
         self.template_vars = {
             "renderer": self,
             "SLASH": '<span class="slash">/</span>',
             "root_folders": list(collector.root_folders()),
+            "root_files": root_files,
             "sort": "name_asc",
             "all_symbols": collector.all_symbols(),
             "all_functions": collector.all_functions(),
             "all_variables": collector.all_variables(),
+            "memory_summary": collector.memory_summary,
+            "memory_analysis": collector.memory_analysis,
             "now": datetime.now(),
         }
 
@@ -311,7 +355,7 @@ class HTMLRenderer(View):
         return result_str + ("?" + query_string if query_string else "")
 
     def url_for_symbol(self, value):
-        if value[collector.TYPE] in [collector.TYPE_FUNCTION]:
+        if value[collector.TYPE] in [collector.TYPE_FUNCTION, collector.TYPE_VARIABLE]:
             return self.url_for("path", path=self.collector.qualified_symbol_name(value))
 
         # file or folder
@@ -391,6 +435,8 @@ def register_jinja_filters(jinja_env):
     jinja_env.filters["symbol_file_url"] = symbol_file_url_filter
     jinja_env.filters["symbol_code_size"] = symbol_code_size_filter
     jinja_env.filters["symbol_var_size"] = symbol_var_size_filter
+    jinja_env.filters["symbol_flash_size"] = symbol_flash_size_filter
+    jinja_env.filters["symbol_ram_size"] = symbol_ram_size_filter
     jinja_env.filters["symbol_stack_size"] = symbol_stack_size_filter
     jinja_env.filters["if_not_none"] = if_not_none_filter
     jinja_env.filters["unique"] = unique_filter
@@ -398,6 +444,7 @@ def register_jinja_filters(jinja_env):
     jinja_env.filters["symbols"] = symbols_filter
     jinja_env.filters["chain"] = chain_filter
     jinja_env.filters["bytes"] = bytes_filter
+    jinja_env.filters["address"] = address_filter
     jinja_env.filters["style_background_bar"] = style_background_bar_filter
     jinja_env.filters["col_sortable"] = col_sortable_filter
     jinja_env.filters["sorted"] = sorted_filter

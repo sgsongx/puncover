@@ -1,9 +1,55 @@
 {% extends "base.html.jinja" %}
 {% block content %}
 
-    <h2>Folders</h2>
+    {% if memory_summary %}
+    <h2>Memory usage</h2>
+    <table class="table table-bordered table-condensed memory-summary">
+        <thead>
+            <tr>
+                <th>Memory</th>
+                <th class="col_size">Code + read-only</th>
+                <th class="col_size">Initialized data</th>
+                <th class="col_size">Static</th>
+                <th class="col_size">Stack</th>
+                <th class="col_size">Heap</th>
+                <th class="col_size">Linker / padding</th>
+                <th class="col_size">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th>FLASH</th>
+                <td class="col_size">{{ memory_summary.flash.code_rodata | bytes }}</td>
+                <td class="col_size">{{ memory_summary.flash.initialized_data | bytes }}</td>
+                <td class="col_size"></td>
+                <td class="col_size"></td>
+                <td class="col_size"></td>
+                <td class="col_size">{{ memory_summary.flash.linker | bytes }}</td>
+                <th class="col_size">{{ memory_summary.flash.total | bytes }}</th>
+            </tr>
+            <tr>
+                <th>RAM</th>
+                <td class="col_size"></td>
+                <td class="col_size"></td>
+                <td class="col_size">{{ memory_summary.ram.static | bytes }}</td>
+                <td class="col_size">{{ memory_summary.ram.stack | bytes }}</td>
+                <td class="col_size">{{ memory_summary.ram.heap | bytes }}</td>
+                <td class="col_size">{{ memory_summary.ram.padding | bytes }}</td>
+                <th class="col_size">{{ memory_summary.ram.total | bytes }}</th>
+            </tr>
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h2>Files and folders</h2>
+    {% if memory_summary %}
+    <p class="text-muted">
+        File and symbol rows show bytes attributable to ELF symbols. The MAP / ELF total also includes
+        linker-generated data, alignment, stack and heap.
+    </p>
+    {% endif %}
     {% import 'lists.html.jinja' as lists with context %}
-    {{ lists.directory(root_folders, []) }}
+    {{ lists.directory(root_folders, root_files, true) }}
 
     <a class="btn btn-default" href="{{ url_for('all') }}">Show all symbols</a>
     <a class="btn btn-default" href="{{ url_for('rack') }}">Analyze text snippet</a>

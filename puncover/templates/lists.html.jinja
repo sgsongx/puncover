@@ -23,19 +23,21 @@
     </ol>
 {% endmacro %}
 
-{% macro directory(folders, files) -%}
+{% macro directory(folders, files, show_memory_total=false) -%}
+    {% set size_label_1 = 'Flash' if memory_summary else 'Code' %}
+    {% set size_label_2 = 'RAM' if memory_summary else 'Static' %}
     <table class="table table-bordered table-hover table-condensed">
         <thead>
             <tr>
                 <th width="100%">{{ 'Name' | col_sortable(true) }}</th>
                 <th>Remarks</th>
-                <th class="col_size">{{ 'Code' | col_sortable }}</th>
-                <th class="col_size">{{ 'Static' | col_sortable(False, 'vars') }}</th>
+                <th class="col_size">{{ size_label_1 | col_sortable(False, 'flash') }}</th>
+                <th class="col_size">{{ size_label_2 | col_sortable(False, 'ram') }}</th>
             </tr>
         </thead>
         <tbody>
-            {% set group_code_size = folders | symbol_code_size %}
-            {% set group_var_size = folders | symbol_var_size %}
+            {% set group_code_size = folders | symbol_flash_size %}
+            {% set group_var_size = folders | symbol_ram_size %}
             {% for folder in (folders | sorted) %}
             <tr>
                 <td>
@@ -44,11 +46,11 @@
                     </a>
                 </td>
                 <td>{% if folder.calls_float_function %}<span class="label label-warning">calls float</span>{% endif %}</td>
-                <td class="col_size" style="{{ folder | symbol_code_size | style_background_bar(group_code_size, color_bar_code) }}">
-                    {{ folder | symbol_code_size | bytes }}
+                <td class="col_size" style="{{ folder | symbol_flash_size | style_background_bar(group_code_size, color_bar_code) }}">
+                    {{ folder | symbol_flash_size | bytes }}
                 </td>
-                <td class="col_size" style="{{ folder | symbol_var_size | style_background_bar(group_var_size, color_bar_var) }}">
-                    {{ folder | symbol_var_size | bytes }}
+                <td class="col_size" style="{{ folder | symbol_ram_size | style_background_bar(group_var_size, color_bar_var) }}">
+                    {{ folder | symbol_ram_size | bytes }}
                 </td>
             </tr>
             {% endfor %}
@@ -61,8 +63,8 @@
                 </tr>
             {% endif %}
 
-            {% set group_code_size = files | symbol_code_size %}
-            {% set group_var_size = files | symbol_var_size %}
+            {% set group_code_size = files | symbol_flash_size %}
+            {% set group_var_size = files | symbol_ram_size %}
             {% for file in (files | sorted) %}
             <tr>
                 <td>
@@ -71,11 +73,11 @@
                     </a>
                 </td>
                 <td>{% if file.calls_float_function %}<span class="label label-warning">calls float</span>{% endif %}</td>
-                <td class="col_size" style="{{ file | symbol_code_size | style_background_bar(group_code_size, color_bar_code) }}">
-                    {{ file | symbol_code_size | bytes}}
+                <td class="col_size" style="{{ file | symbol_flash_size | style_background_bar(group_code_size, color_bar_code) }}">
+                    {{ file | symbol_flash_size | bytes}}
                 </td>
-                <td class="col_size" style="{{ file | symbol_var_size | style_background_bar(group_var_size, color_bar_var) }}">
-                    {{ file | symbol_var_size | bytes}}
+                <td class="col_size" style="{{ file | symbol_ram_size | style_background_bar(group_var_size, color_bar_var) }}">
+                    {{ file | symbol_ram_size | bytes}}
                 </td>
             </tr>
             {% endfor %}
@@ -89,14 +91,30 @@
             {% endif %}
         </tbody>
         <tfoot>
+            {% if show_memory_total and memory_summary %}
             <tr>
-            <th colspan="2">&sum; over all
+            <th colspan="2">&sum; attributed symbols
                 ({{ folders | length }} folder{{ 's' if folders | length != 1}},
                  {{ files | length }} file{{ 's' if files | length != 1}})
             </th>
-            <th class="col_size">{{ files | chain(folders) | symbol_code_size | bytes}}</th>
-            <th class="col_size">{{ files | chain(folders) | symbol_var_size | bytes}}</th>
+            <th class="col_size">{{ files | chain(folders) | symbol_flash_size | bytes}}</th>
+            <th class="col_size">{{ files | chain(folders) | symbol_ram_size | bytes}}</th>
             </tr>
+            <tr>
+                <th colspan="2">MAP / ELF total (includes linker data, stack, heap and padding)</th>
+                <th class="col_size">{{ memory_summary.flash.total | bytes }}</th>
+                <th class="col_size">{{ memory_summary.ram.total | bytes }}</th>
+            </tr>
+            {% else %}
+            <tr>
+                <th colspan="2">&sum; over all
+                    ({{ folders | length }} folder{{ 's' if folders | length != 1}},
+                     {{ files | length }} file{{ 's' if files | length != 1}})
+                </th>
+                <th class="col_size">{{ files | chain(folders) | symbol_flash_size | bytes}}</th>
+                <th class="col_size">{{ files | chain(folders) | symbol_ram_size | bytes}}</th>
+            </tr>
+            {% endif %}
         </tfoot>
 
     </table>
@@ -109,62 +127,76 @@
 {% endmacro %}
 
 {% macro symbols(functions, variables) -%}
+    {% set size_label_1 = 'Flash' if memory_summary else 'Code' %}
+    {% set size_label_2 = 'RAM' if memory_summary else 'Static' %}
     <table class="table table-bordered table-hover table-condensed">
         <thead>
             <tr>
                 <th width="100%">{{ 'Name' | col_sortable(true) }}</th>
                 <th>Remarks</th>
+                <th>Run address</th>
+                {% if memory_summary %}<th>FLASH load</th>{% endif %}
                 <th class="col_size">{{ 'Stack' | col_sortable(true) }}</th>
-                <th class="col_size">{{ 'Code' | col_sortable(true) }}</th>
-                <th class="col_size">{{ 'Static' | col_sortable(False, 'vars') }}</th>
+                <th class="col_size">{{ size_label_1 | col_sortable(False, 'flash') }}</th>
+                <th class="col_size">{{ size_label_2 | col_sortable(False, 'ram') }}</th>
             </tr>
         </thead>
 
         <tbody>
 
 {# functions #}
-                {% set group_code_size = functions | symbol_code_size %}
-                {% set group_var_size = (variables + functions) | symbol_var_size %}
+                {% set group_code_size = (variables + functions) | symbol_flash_size %}
+                {% set group_var_size = (variables + functions) | symbol_ram_size %}
 
                 {% for symbol in (functions | sorted) %}
                 <tr>
                     <td><a href="{{ symbol | symbol_url }}" class="icon-function">{{ symbol.display_name |e }}</a></td>
                     <td>{{ symbol_remarks(symbol) }}</td>
+                    <td><code>{{ symbol.address | address }}</code></td>
+                    {% if memory_summary %}<td><code>{{ symbol.flash_address | address }}</code></td>{% endif %}
                     <td class="col_size">{{ symbol.stack_size | bytes }}</td>
-                    <td class="col_size" style="{{ symbol.size | style_background_bar(group_code_size, color_bar_code) }}">
-                    {{ symbol.size | bytes }}
+                    <td class="col_size" style="{{ symbol | symbol_flash_size | style_background_bar(group_code_size, color_bar_code) }}">
+                    {{ symbol | symbol_flash_size | bytes }}
                     </td>
-                    <td class="col_size"></td>
+                    <td class="col_size">{{ symbol | symbol_ram_size | bytes }}</td>
                 </tr>
                 {% endfor %}
             {% if functions | length > 1 and variables | length > 0 %}
                 <tr>
-                    <th colspan="3">&sum; {{ functions | length }} functions</th>
-                    <th class="col_size">{{ functions | symbol_code_size | bytes }}</th>
-                    <th></th>
+                    <th colspan="{{ 5 if memory_summary else 4 }}">&sum; {{ functions | length }} functions</th>
+                    <th class="col_size">{{ functions | symbol_flash_size | bytes }}</th>
+                    <th class="col_size">{{ functions | symbol_ram_size | bytes }}</th>
                 </tr>
             {% endif %}
 
 {# static vars #}
             {% for var in variables | sorted %}
              <tr>
-                <td colspan="4"><span class="icon-variable">{{ var.display_name |e }}</span></td>
-                <td class="col_size" style="{{ var | symbol_var_size | style_background_bar(group_var_size, color_bar_var) }}">
-                    {{ var | symbol_var_size | bytes }}
+                <td><a href="{{ var | symbol_url }}" class="icon-variable">{{ var.display_name |e }}</a></td>
+                <td></td>
+                <td><code>{{ var.address | address }}</code></td>
+                {% if memory_summary %}<td><code>{{ var.flash_address | address }}</code></td>{% endif %}
+                <td></td>
+                <td class="col_size" style="{{ var | symbol_flash_size | style_background_bar(group_code_size, color_bar_code) }}">
+                    {{ var | symbol_flash_size | bytes }}
+                </td>
+                <td class="col_size" style="{{ var | symbol_ram_size | style_background_bar(group_var_size, color_bar_var) }}">
+                    {{ var | symbol_ram_size | bytes }}
                 </td>
             </tr>
             {% endfor %}
         {% if variables | length > 1 and functions | length > 0 %}
             <tr>
-                <th colspan="4">&sum; {{ variables | length }} variables</th>
-                <th class="col_size">{{ variables | symbol_var_size | bytes }}</th>
+                <th colspan="{{ 5 if memory_summary else 4 }}">&sum; {{ variables | length }} variables</th>
+                <th class="col_size">{{ variables | symbol_flash_size | bytes }}</th>
+                <th class="col_size">{{ variables | symbol_ram_size | bytes }}</th>
             </tr>
         {% endif %}
             </tbody>
 
         <tfoot>
             <tr>
-            <th colspan="3">&sum; over all
+            <th colspan="{{ 5 if memory_summary else 4 }}">&sum; {{ 'attributed symbols' if memory_summary else 'over all' }}
                 ({{ functions | length }} function{{ 's' if functions | length != 1}},
                  {{ variables | length }} variable{{ 's' if variables | length != 1}})
 

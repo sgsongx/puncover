@@ -8,9 +8,9 @@
     <table class="table table-condensed">
         <tbody>
             <tr>
-                <th>Function</th>
+                <th>{{ 'Function' if symbol.type == 'function' else 'Variable' }}</th>
                 <td colspan="5">
-                    <span class="icon-function">{{ symbol.display_name }}</span>
+                    <span class="{{ 'icon-function' if symbol.type == 'function' else 'icon-variable' }}">{{ symbol.display_name }}</span>
                 </td>
             </tr>
 
@@ -19,17 +19,30 @@
                 <th>Address</th>
                 <th>Remarks</th>
                 <th>Stack</th>
-                <th>Code</th>
-                <th>Static</th>
+                <th>Flash</th>
+                <th>RAM</th>
             </tr>
             <tr>
-                <td>0x{{ symbol.address }}</td>
+                <td>{{ symbol.address | address }}</td>
                 <td>{{ lists.symbol_remarks(symbol) }}</td>
                 <td>{% if symbol.stack_size is defined %}{{ symbol.stack_size | bytes }} ({{ symbol.stack_qualifiers }}){% endif %}</td>
-                <td>{{ symbol.size | bytes }}</td>
-                <td></td>
+                <td>{{ symbol | symbol_flash_size | bytes }}</td>
+                <td>{{ symbol | symbol_ram_size | bytes }}</td>
             </tr>
 
+            {% if memory_summary %}
+            <tr>
+                <th>ELF</th>
+                <td colspan="5">
+                    section {{ symbol.section or '-' }};
+                    size {{ symbol.elf_size | bytes }};
+                    FLASH address {% if symbol.flash_address is defined %}{{ symbol.flash_address | address }}{% else %}-{% endif %};
+                    object {{ symbol.object_file or '-' }}
+                </td>
+            </tr>
+            {% endif %}
+
+            {% if symbol.type == 'function' %}
             <tr>
                 <th>{% if symbol.callers | length <= 0 %}No Callers{% else %}Callers ({{ symbol.callers | length }}){% endif %}</th>
                 <td colspan="5">
@@ -60,9 +73,11 @@
                 {% endfor %}
                 </td>
             </tr>
+            {% endif %}
         </tbody>
     </table>
 
+    {% if symbol.type == 'function' %}
     {% if symbol.prev_function %}
     <pre><a href="{{ symbol.prev_function|symbol_url }}">{{ symbol.prev_function.display_name |e }} {{ '(%d)' % symbol.prev_function.size if symbol.prev_function.size}}</a></pre>
     {% endif %}
@@ -124,6 +139,7 @@
         {% else %}
             <p>No callers for this function.</p>
         {% endif %}
+    {% endif %}
     {% endif %}
 
 {% endblock %}

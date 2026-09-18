@@ -7,6 +7,12 @@ import sys
 NAME = "name"
 DISPLAY_NAME = "display_name"
 SIZE = "size"
+ELF_SIZE = "elf_size"
+FLASH_SIZE = "flash_size"
+RAM_SIZE = "ram_size"
+FLASH_ADDRESS = "flash_address"
+SECTION = "section"
+OBJECT_FILE = "object_file"
 PATH = "path"
 BASE_FILE = "base_file"
 LINE = "line"
@@ -95,12 +101,16 @@ class Collector:
         self.symbols_by_qualified_name = None
         self.symbols_by_name = None
         self.user_defined_stack_report = None
+        self.memory_analysis = None
+        self.memory_summary = None
 
     def reset(self):
         self.symbols = {}
         self.file_elements = {}
         self.symbols_by_qualified_name = None
         self.symbols_by_name = None
+        self.memory_analysis = None
+        self.memory_summary = None
 
     def qualified_symbol_name(self, symbol):
         if BASE_FILE in symbol:
@@ -401,6 +411,42 @@ class Collector:
             self.parse_size_line(line)
 
         self.elf_mtime = os.path.getmtime(elf_file)
+
+    def apply_memory_analysis(self, analysis):
+        """Attach ELF/MAP-derived FLASH and RAM usage to collected symbols."""
+        self.memory_analysis = analysis
+        self.memory_summary = analysis.summary
+
+        records_by_address = {}
+        for record in analysis.symbols:
+            records_by_address.setdefault(record.address, []).append(record)
+
+        for address, records in records_by_address.items():
+            symbol = self.symbols.get(address)
+            if symbol:
+                record = next((r for r in records if r.name == symbol.get(NAME)), None)
+                if record is None:
+                    typed = [r for r in records if r.symbol_type == symbol.get(TYPE)]
+                    record = max(typed or records, key=lambda r: r.size)
+            else:
+                record = max(records, key=lambda r: r.size)
+                symbol = self.add_symbol(
+                    record.name,
+                    format(record.address, "x"),
+                    size=record.size,
+                    file=record.object_file,
+                    type=record.symbol_type,
+                )
+
+            symbol[TYPE] = record.symbol_type
+            symbol[ELF_SIZE] = record.size
+            symbol[FLASH_SIZE] = record.flash_size
+            symbol[RAM_SIZE] = record.ram_size
+            symbol[SECTION] = record.section
+            if record.flash_address is not None:
+                symbol[FLASH_ADDRESS] = record.flash_address
+            if record.object_file:
+                symbol[OBJECT_FILE] = record.object_file
 
     def parse_su_dir(self, su_dir):
         def gen_find(filepat, top):
@@ -800,6 +846,12 @@ class Collector:
                     "line",
                     "type",
                     "size",
+                    ELF_SIZE,
+                    FLASH_SIZE,
+                    RAM_SIZE,
+                    FLASH_ADDRESS,
+                    SECTION,
+                    OBJECT_FILE,
                     "called_from_other_file",
                     "calls_float_function",
                     "performs_indirect_call",  # TODO add for manual resolution
@@ -849,3 +901,5 @@ class Collector:
         # if file exist
         export_json_data["functions"] = fn_symbols
         export_json_data["variables"] = var_symbols
+        if self.memory_summary:
+            export_json_data["memory"] = self.memory_summary
