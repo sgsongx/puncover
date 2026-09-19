@@ -837,6 +837,10 @@ class Collector:
         if not self.symbols_by_qualified_name:
             self.build_symbol_name_index()
         for full_path, sym in self.symbols_by_qualified_name.items():
+            symbol_type = sym.get(TYPE)
+            if symbol_type not in ("function", "variable"):
+                continue
+
             # if we use the plain symbols there are circular references
             # and memory explodes into 10's of GB's serializing it so make
             # symbols non-circular before serializing them to the database
@@ -889,13 +893,14 @@ class Collector:
                     "base_file",
                     "deepest_callee_tree",
                     "deepest_caller_tree",
+                    "missing_stacksize_in_call_tree",
                 ]:
                     # todo nothing?
                     pass
                 else:
                     print("unknown key " + sym_ele)
             # add flatten symbol to list
-            symbols = fn_symbols if non_circular_sym["type"] == "function" else var_symbols
+            symbols = fn_symbols if symbol_type == "function" else var_symbols
             non_circular_sym.pop("type")
             symbols += [non_circular_sym]
         # if file exist

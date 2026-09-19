@@ -1,6 +1,7 @@
 import tempfile
 from pathlib import Path
 
+from puncover.collector import Collector
 from puncover.memory import GnuMapFile, MemoryAnalyzer, MemorySection
 
 
@@ -59,3 +60,45 @@ def test_memory_summary_includes_initialized_data_stack_heap_and_padding():
             "total": 146,
         },
     }
+
+
+def test_json_export_includes_memory_fields_and_skips_untyped_elf_labels():
+    collector = Collector(None)
+    collector.symbols_by_qualified_name = {
+        "value": {
+            "name": "value",
+            "address": "20000000",
+            "type": "variable",
+            "size": 4,
+            "elf_size": 4,
+            "flash_size": 4,
+            "ram_size": 4,
+            "flash_address": 0x10000,
+            "section": ".data",
+            "object_file": "value.o",
+        },
+        "linker_label": {"name": "linker_label", "address": "10004"},
+    }
+    collector.memory_summary = {
+        "flash": {"total": 4},
+        "ram": {"total": 4},
+    }
+    report = {}
+
+    collector.prepare_report_for_json_export(report)
+
+    assert report["memory"] == collector.memory_summary
+    assert report["functions"] == []
+    assert report["variables"] == [
+        {
+            "name": "value",
+            "address": 0x20000000,
+            "size": 4,
+            "elf_size": 4,
+            "flash_size": 4,
+            "ram_size": 4,
+            "flash_address": 0x10000,
+            "section": ".data",
+            "object_file": "value.o",
+        }
+    ]

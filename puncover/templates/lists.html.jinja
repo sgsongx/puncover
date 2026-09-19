@@ -3,6 +3,7 @@
 
 {% macro breadcrumbs(folder, file, line) %}
     <ol class="breadcrumb folders">
+        {% if folder %}
         {% for ancestor in folder.ancestors | reverse %}
         <li><a href="{{ ancestor | symbol_url }}">{{ ancestor.name | e}}</a></li>
         {% endfor %}
@@ -11,6 +12,7 @@
             {% else -%}{{ folder.name | e}}
             {% endif -%}
         </li>
+        {% endif %}
 
         {% if file %}
         <li class="active">{% if line -%}

@@ -1,5 +1,8 @@
 import unittest
+from pathlib import Path
 from unittest.mock import Mock
+
+from flask import Flask
 
 from puncover import collector, renderers
 
@@ -193,6 +196,36 @@ class TestRenderer(unittest.TestCase):
                     with patch("puncover.renderers.url_for", return_value="/"):
                         actual = c.url_for("/")
                         self.assertEqual("/?foo=bar", actual)
+
+    def test_root_file_page_renders_without_a_parent_folder(self):
+        app = Flask(__name__, template_folder="../puncover/templates")
+        renderers.register_jinja_filters(app.jinja_env)
+
+        root_file = {
+            collector.TYPE: collector.TYPE_FILE,
+            collector.NAME: "app.c",
+            collector.PATH: Path("app.c"),
+            collector.FOLDER: None,
+            collector.FUNCTIONS: [],
+            collector.VARIABLES: [],
+            collector.SYMBOLS: [],
+        }
+        collection = Mock()
+        collection.root_folders.return_value = []
+        collection.all_files.return_value = [root_file]
+        collection.all_symbols.return_value = []
+        collection.all_functions.return_value = []
+        collection.all_variables.return_value = []
+        collection.memory_summary = None
+        collection.memory_analysis = None
+        collection.file_elements = {Path("app.c"): root_file}
+        collection.symbol.return_value = None
+        renderers.register_urls(app, collection)
+
+        with app.test_request_context("/path/app.c/"):
+            response = renderers.PathRenderer(collection).dispatch_request("app.c")
+
+        self.assertIn("app.c", response)
 
     def test_none_sum_empty_list(self):
         """Test that none_sum returns None for an empty list"""
